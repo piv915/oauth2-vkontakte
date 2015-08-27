@@ -2,29 +2,34 @@
 
 namespace J4k\OAuth2\Client\Provider;
 
-use League\OAuth2\Client\Entity\User;
+use League\OAuth2\Client\Provider\Exception\IdentityProviderException;
+use League\OAuth2\Client\Provider\ResourceOwnerInterface;
 use League\OAuth2\Client\Token\AccessToken;
 use League\OAuth2\Client\Provider\AbstractProvider;
+use Psr\Http\Message\ResponseInterface;
 
 
 class Vkontakte extends AbstractProvider
 {
+    /**
+     * OAuth URL.
+     *
+     * @const string
+     */
+    const BASE_VK_URL = 'https://oauth.vk.com';
+
+    const ACCESS_TOKEN_RESOURCE_OWNER_ID = 'user_id';
+
+    const API_VERSION = '5.37';
+
     public $scopes = ['email'];
     public $uidKey = 'user_id';
     public $responseType = 'json';
-
-    public function urlAuthorize()
-    {
-        return 'https://oauth.vk.com/authorize';
-    }
-
-    public function urlAccessToken()
-    {
-        return 'https://oauth.vk.com/access_token';
-    }
     
     public function getAccessToken($grant = 'authorization_code', $params = [])
     {
+        return parent::getAccessToken($grant, $params);
+
         if (is_string($grant)) {
             // PascalCase the grant. E.g: 'authorization_code' becomes 'AuthorizationCode'
             $className = str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $grant)));
@@ -106,7 +111,82 @@ class Vkontakte extends AbstractProvider
         return $accessToken;
     }
 
-    public function urlUserDetails(AccessToken $token)
+//    public function userDetails($response, AccessToken $token)
+//    {
+//        $response = $response->response[0];
+//
+//        $user = new User();
+//
+//        $email = (isset($token->email)) ? $token->email : null;
+//        $location = (isset($response->country)) ? $response->country : null;
+//        $description = (isset($response->status)) ? $response->status : null;
+//
+//        $user->exchangeArray([
+//            'uid' => $response->uid,
+//            'nickname' => $response->nickname,
+//            'name' => $response->screen_name,
+//            'firstname' => $response->first_name,
+//            'lastname' => $response->last_name,
+//            'email' => $email,
+//            'location' => $location,
+//            'description' => $description,
+//            'imageUrl' => $response->photo_200_orig,
+//        ]);
+//
+//        return $user;
+//    }
+
+//    public function userUid($response, AccessToken $token)
+//    {
+//        $response = $response->response[0];
+//
+//        return $response->uid;
+//    }
+//
+//    public function userEmail($response, AccessToken $token)
+//    {
+//        return (isset($token->email)) ? $token->email : null;
+//    }
+//
+//    public function userScreenName($response, AccessToken $token)
+//    {
+//        $response = $response->response[0];
+//
+//        return [$response->first_name, $response->last_name];
+//    }
+
+    /**
+     * Returns the base URL for authorizing a client.
+     *
+     * Eg. https://oauth.service.com/authorize
+     *
+     * @return string
+     */
+    public function getBaseAuthorizationUrl()
+    {
+        return $this->getBaseVkUrl().'/authorize';
+    }
+
+    /**
+     * Returns the base URL for requesting an access token.
+     *
+     * Eg. https://oauth.service.com/token
+     *
+     * @param array $params
+     * @return string
+     */
+    public function getBaseAccessTokenUrl(array $params)
+    {
+        return $this->getBaseVkUrl().'/access_token';
+    }
+
+    /**
+     * Returns the URL for requesting the resource owner's details.
+     *
+     * @param AccessToken $token
+     * @return string
+     */
+    public function getResourceOwnerDetailsUrl(AccessToken $token)
     {
         $fields = ['email',
             'nickname',
@@ -135,51 +215,78 @@ class Vkontakte extends AbstractProvider
             'schools',
             'verified', ];
 
-        return "https://api.vk.com/method/users.get?user_id={$token->uid}&fields="
-            .implode(",", $fields)."&access_token={$token}";
+//        return "https://api.vk.com/method/users.get?user_id={$token->getResourceOwnerId()}".
+//        "&v=".static::API_VERSION."&access_token={$token}";
+
+        return "https://api.vk.com/method/users.get?user_id={$token->getResourceOwnerId()}&fields="
+        .implode(",", $fields)."&access_token={$token}&v=".static::API_VERSION;
     }
 
-    public function userDetails($response, AccessToken $token)
+    /**
+     * Returns the default scopes used by this provider.
+     *
+     * This should only be the scopes that are required to request the details
+     * of the resource owner, rather than all the available scopes.
+     *
+     * @return array
+     */
+    protected function getDefaultScopes()
     {
-        $response = $response->response[0];
-
-        $user = new User();
-
-        $email = (isset($token->email)) ? $token->email : null;
-        $location = (isset($response->country)) ? $response->country : null;
-        $description = (isset($response->status)) ? $response->status : null;
-
-        $user->exchangeArray([
-            'uid' => $response->uid,
-            'nickname' => $response->nickname,
-            'name' => $response->screen_name,
-            'firstname' => $response->first_name,
-            'lastname' => $response->last_name,
-            'email' => $email,
-            'location' => $location,
-            'description' => $description,
-            'imageUrl' => $response->photo_200_orig,
-        ]);
-
-        return $user;
+        return [ 'email', 'wall' ];
     }
 
-    public function userUid($response, AccessToken $token)
+    /**
+     * Checks a provider response for errors.
+     *
+     * @throws IdentityProviderException
+     * @param  ResponseInterface $response
+     * @param  array|string $data Parsed response data
+     * @return void
+     */
+    protected function checkResponse(ResponseInterface $response, $data)
     {
-        $response = $response->response[0];
-
-        return $response->uid;
+        if (!empty($data['error'])) {
+            $message = $data['error']['type'].': '.$data['error']['message'];
+            throw new IdentityProviderException($message, $data['error']['code'], $data);
+        }
     }
 
-    public function userEmail($response, AccessToken $token)
+    /**
+     * Generates a resource owner object from a successful resource owner
+     * details request.
+     *
+     * @param  array $response
+     * @param  AccessToken $token
+     * @return ResourceOwnerInterface
+     */
+    protected function createResourceOwner(array $response, AccessToken $token)
     {
-        return (isset($token->email)) ? $token->email : null;
+        return new VkUser($response);
     }
 
-    public function userScreenName($response, AccessToken $token)
+    /**
+     * Get the base Vk URL.
+     *
+     * @return string
+     */
+    private function getBaseVkUrl()
     {
-        $response = $response->response[0];
+        return static::BASE_VK_URL;
+    }
 
-        return [$response->first_name, $response->last_name];
+    /**
+     * Requests resource owner details.
+     *
+     * @param  AccessToken $token
+     * @return mixed
+     */
+    protected function fetchResourceOwnerDetails(AccessToken $token)
+    {
+        $url = $this->getResourceOwnerDetailsUrl($token);
+
+        $request = $this->getAuthenticatedRequest(self::METHOD_GET, $url, $token);
+
+        $baseResponse = $this->getResponse($request);
+        return $baseResponse['response'][0];
     }
 }
