@@ -246,8 +246,8 @@ class Vkontakte extends AbstractProvider
     protected function checkResponse(ResponseInterface $response, $data)
     {
         if (!empty($data['error'])) {
-            $message = $data['error']['type'].': '.$data['error']['message'];
-            throw new IdentityProviderException($message, $data['error']['code'], $data);
+            $message = $data['error_description'];
+            throw new IdentityProviderException($message, 0/*$data['error']*/, $data);
         }
     }
 
