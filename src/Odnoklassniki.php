@@ -9,14 +9,14 @@ use League\OAuth2\Client\Provider\AbstractProvider;
 use Psr\Http\Message\ResponseInterface;
 
 
-class Vkontakte extends AbstractProvider
+class Odnoklassniki extends AbstractProvider
 {
     /**
      * OAuth URL.
      *
      * @const string
      */
-    const BASE_VK_URL = 'https://oauth.vk.com';
+    const BASE_OK_URL = 'https://connect.ok.ru/oauth';
 
     const ACCESS_TOKEN_RESOURCE_OWNER_ID = 'user_id';
 
@@ -40,7 +40,7 @@ class Vkontakte extends AbstractProvider
      */
     public function getBaseAuthorizationUrl()
     {
-        return $this->getBaseVkUrl().'/authorize';
+        return $this->getBaseOkUrl().'/authorize';
     }
 
     /**
@@ -53,7 +53,8 @@ class Vkontakte extends AbstractProvider
      */
     public function getBaseAccessTokenUrl(array $params)
     {
-        return $this->getBaseVkUrl().'/access_token';
+//        return $this->getBaseOkUrl().'/access_token';
+        return 'http://api.odnoklassniki.ru/oauth/token.do';
     }
 
     /**
@@ -105,7 +106,7 @@ class Vkontakte extends AbstractProvider
      */
     protected function getDefaultScopes()
     {
-        return [ 'email', 'wall' ];
+        return [ 'VALUABLE_ACCESS' ];
     }
 
     /**
@@ -134,7 +135,7 @@ class Vkontakte extends AbstractProvider
      */
     protected function createResourceOwner(array $response, AccessToken $token)
     {
-        return new VkUser($response);
+        return new OkUser($response);
     }
 
     /**
@@ -142,9 +143,9 @@ class Vkontakte extends AbstractProvider
      *
      * @return string
      */
-    private function getBaseVkUrl()
+    private function getBaseOkUrl()
     {
-        return static::BASE_VK_URL;
+        return static::BASE_OK_URL;
     }
 
     /**
@@ -160,6 +161,7 @@ class Vkontakte extends AbstractProvider
         $request = $this->getAuthenticatedRequest(self::METHOD_GET, $url, $token);
 
         $baseResponse = $this->getResponse($request);
+        var_dump($baseResponse); exit;
         return $baseResponse['response'][0];
     }
 }
